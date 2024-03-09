@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Chat</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="img/png" href="img/favicon.png">
+</head>
+
+<body>
+<!-- ヘッダー ここから-->
+  <header>
+    <div class="chat_container">
+        <div class="item">
+            <div class="left"><img src="img/chat_left.png" alt="">
+            </div>
+        </div>
+        <div class="item">
+            <div class="center">
+                <h1 class="page-title">Let's Chat</h1>
+            </div>
+        </div>
+        <div class="item">
+            <div class="right"><img src="img/chat_right.png" alt="">
+            </div>
+        </div>
+    </div>
+</header>
+<!-- ヘッダー ここまで-->
+
+<!-- コンテンツ表示画面 ここから-->
+<!-- JavaScriptで扱うものは必ずidをつける -->
+<!-- idをつけるのは、メッセージ表示領域の#output、テキストボックスのuname、テキストエリアの#text、ボタンの#send -->
+<div class="chat_wrapper">
+  <!-- チャットの内容を表示する ここから-->
+  <div id="output"></div>
+  <!-- チャットの内容を表示する ここまで-->
+
+  <!-- チャットの内容を入力する ここから-->
+  <div class="input_chat">
+    <div class="input_uname"> 
+      <label for="uname">なまえ：</label>
+      <input type="text" id="uname"> 
+    </div>
+
+    <div class="input_text">
+      <textarea id="text" cols="30" rows="10"></textarea>
+    </div>
+
+    <div class="send">
+      <button id="send">送信</button>
+    </div>
+  </div>
+  <!-- チャットの内容を入力する ここまで-->
+</div>
+<!-- コンテンツ表示画面 ここまで-->
+
+<!-- フッター ここから-->
+<footer>
+  <small>Copyrights 2024 *** All RIghts Reserved.</small>
+</footer>
+<!-- フッター ここまで-->
+
+<!-- JQuery を使えるようにする(今回はCDNから読み込む) ここから-->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<!-- JQuery を使えるようにする(今回はCDNから読み込む) ここまで-->
+
+<!-- Firebase からコピーしてきたスクリプト ここから-->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  // 直上のコード2行は、firebase-app.jsを読み込んで最小限のコアライブラリを読み込んでいる。
+
+  // FirebaseのVer.9以降、仕様変更があり、コード2行を追加する必要あり。
+  // まず、firebase-database.jsを読み込み、RealtimeDatabaseを使えるようにする必要がある。fromの行。
+  // importで利用する関数を宣言し、利用できる状態にする。宣言した関数しか使えないので使うものを宣言する。importの行。
+  import { getDatabase, ref, push, set, update, remove, onChildAdded, onChildChanged , onChildRemoved } 
+  from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+  
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+
+  // 関数initializeAppに引数としてオブジェクト型変数firebaseConfig渡す。
+  // これで自分用に作成したKeyでもってFirebaseに接続できるようになる
+  const app = initializeApp(firebaseConfig); 
+  // Firebase からコピーしてきたスクリプト ここまで(一部追記あり)
+
+  //LINE風チャット処理のコード ここから
+  // Firebaseに接続した後、関数getDatabaseに引数appをいれてRealtimDatabaseに接続する。
+  const db = getDatabase(app);
+
+  // RealtimeDB内のどこの階層にデータを入れるかを指定する。今回はchatという階層を指定する。
+  const dbRef = ref(db,"chat");
+
+  // 1-a. データの送信イベント(メッセージの登録）
+  $("#send").on("click",function(){
+    const msg ={ //オブジェクト型の変数msgを定義する。
+      uname :$("#uname").val(), //id unameの値(value)を取得してunameにいれる。
+      text  :$("#text").val(), //id textの値(value)を取得してtextにいれる。
+      sent_at: new Date().toISOString() //メッセージを送信した時間を取得する。
+    }
+    const newPostRef = push(dbRef); //チャットに送るデータにはユニークKEYをつけたいのでユニークkeyを生成する。
+    set(newPostRef,msg); //関数set()を使ってFirebaseのRealtimeDatabaseに"chat"にユニークKEYをつけて、オブジェクト型変数msgをvalueとしてセット(登録)する。
+  });
+
+  // 1-b. データの受信（最初にデータ取得＆onSnapshotでリアルタイムにデータを取得）
+  onChildAdded(dbRef,function(data){ //関数onChildAdded()でRealtimeDatabaseに送信されてくるデータを監視する。RealtimeDatabaseにデータが入ってきたらdataが自動的に入る
+    const msg = data.val(); //Dataが入ってきたら、関数data.val()を使ってオブジェクト変数を取得し、変数msgに代入する。
+    const key = data.key; //データのユニークkeyを取得する（削除や更新に必須！！）。keyの後に()はつけなくてよい。
+    // 表示するHTMLを変数hとして作成し、id outputに関数appendに渡して、表示させる
+    let h =  '<p id="'+key+'">'; //pタグにidとしてキーを持たせている。削除したときにほかの人のチャットからも消すためにidが必要。
+        h += '<span contentEditable="true" id="'+key+'_update">'+ msg.text+'</span>'; //更新するときのテキストエリアが伸びる！
+        h += '<span class="remove" data-key="'+key+'">🚮</span>' 
+        h += '<span class="update" data-key="'+key+'">🆙</span>'
+        h += '<br>';
+        h += msg.uname;
+        h += '<span> : '+new Date(msg.sent_at).toLocaleString();
+        h += '</p>';
+        // $("#output").prepend(h);
+        $("#output").append(h); //id outputの最後に追加する
+  });
+
+  // 2-a 削除イベント
+  $("#output").on("click", ".remove", function(){ // id output(メッセージを表示しているエリア）のクラスremove(ごみ箱）がクリックされたら
+      const key = $(this).attr("data-key"); // クリックしたところ(this)に埋め込まれているキーを取得する。
+      const remove_item = ref(db,"chat/"+key); // 関数ref()を使って場所を監視し、データベースchatのなかのユニークkeyを変数remove_itemに入れる。
+      remove(remove_item); // Firebaseのデータ削除する関数removeを使って削除する。
+  });
+
+  // 2-b 削除処理がFirebase側で実行されたらイベント発生
+  onChildRemoved(dbRef, (data) => { // データベース側で削除された(Removed)ことを検知して
+    $("#"+data.key).remove(); // DOM操作関数remove()を使って対象"#"+data.key（このidはpタグにつけられているのでそのpタグで囲まれた部分をまるっと）を削除する。
+  });
+
+  // 3-a 更新イベント
+  $("#output").on("click", ".update", function(){ // id output(メッセージを表示しているエリア）のクラスupdateがクリックされたら
+      const key = $(this).attr("data-key"); // クリックしたところ(this)に埋め込まれているキーを取得する。
+      update(ref(db,"chat/"+key),{ // 関数ref()を使ってどこのキーのデータをアップデートするか
+        text: $("#"+key+'_update').html() // id "#"+key+'_update'（可変でテキストを編集できるところ）のhtml（中の文字列を）取得して更新（書き換え）する。
+      })
+  });
+
+  // 3-b 更新処理がFirebase側で実行されたらイベント発生
+  onChildChanged(dbRef, (data) => { // データベース側で何か変更(Changed)があったことを検知して
+    $("#"+data.key+'_update').html(data.val().text); // id "#"+data.key+'_update'のところのhtmlをdata.valの中のtextに書き換える。
+    $("#"+data.key+'_update').fadeOut(800).fadeIn(800); // 書き換わった部分をfadeOutとfadeInで教えてあげる。
+  });
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
